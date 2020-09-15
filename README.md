@@ -8,7 +8,7 @@ AUR: [spd-eeprom](https://aur.archlinux.org/packages/spd-eeprom)
 ## Dependencies
 
 ```
-python
+python3
 ```
 
 ## Usage

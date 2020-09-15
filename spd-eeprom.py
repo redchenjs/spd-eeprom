@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # spd-eeprom.py  --  A simple command line tool for reading and writing AT24/EE1004 SPD EEPROMs.
 #
