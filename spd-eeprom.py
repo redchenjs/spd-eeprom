@@ -26,8 +26,7 @@ import subprocess
 try:
     import fcntl
 except ImportError:
-    print("This operating system is not supported.")
-    exit(1)
+    sys.exit("This operating system is not supported.")
 
 # To determine what functionality is present
 I2C_FUNC_I2C = 0x00000001
@@ -118,8 +117,7 @@ def spd_set_page(fd, page):
 def spd_read(fd, smbus_idx, dimm_slot, file_path):
     real_path = os.path.realpath(file_path)
     if not os.access(os.path.dirname(real_path), os.W_OK) or os.path.isdir(real_path):
-        print("Could not write file:", file_path)
-        sys.exit(1)
+        sys.exit("Could not write file: %s" % file_path)
 
     ee1004 = spd_set_page(fd, 0)
 
@@ -134,8 +132,7 @@ def spd_read(fd, smbus_idx, dimm_slot, file_path):
             if spd_set_page(fd, page):
                 print("SPD PAGE %d:" % page)
             else:
-                print("Set SPD PAGE %d failed." % page)
-                sys.exit(1)
+                sys.exit("Set SPD PAGE %d failed." % page)
 
         for index in range(0, 256):
             print("Reading at 0x%02x" % index, end="\r")
@@ -143,8 +140,7 @@ def spd_read(fd, smbus_idx, dimm_slot, file_path):
             try:
                 res = i2c_smbus_read_byte_data(fd, 0x50 + dimm_slot, index)
             except IOError:
-                print("\n\nRead failed.")
-                sys.exit(1)
+                sys.exit("\n\nRead failed.")
 
             spd_file.write(res.to_bytes(1, byteorder="little"))
 
@@ -158,26 +154,22 @@ def spd_read(fd, smbus_idx, dimm_slot, file_path):
 def spd_write(fd, smbus_idx, dimm_slot, file_path):
     real_path = os.path.realpath(file_path)
     if not os.access(real_path, os.R_OK) or os.path.isdir(real_path):
-        print("Could not read file:", file_path)
-        sys.exit(1)
+        sys.exit("Could not read file: %s" % file_path)
 
     ee1004 = spd_set_page(fd, 0)
 
     file_size = os.path.getsize(file_path)
     if not ee1004 and file_size != 256:
-        print("The SPD file must be exactly 256 bytes!")
-        sys.exit(1)
+        sys.exit("The SPD file must be exactly 256 bytes!")
     elif ee1004 and file_size != 512:
-        print("The SPD file must be exactly 512 bytes!")
-        sys.exit(1)
+        sys.exit("The SPD file must be exactly 512 bytes!")
 
     print("Writing to %s SPD EEPROM: 0x5%d on SMBus %d" % ("EE1004" if ee1004 else "AT24", dimm_slot, smbus_idx))
 
     print("\nWARNING! Writing wrong data to SPD EEPROM will leave your system UNBOOTABLE!")
     ans = input("Continue anyway? [y/N] ").lower()
     if ans != "y":
-        print("\nWrite aborted.")
-        sys.exit(1)
+        sys.exit("\nWrite aborted.")
 
     spd_file = open(file_path, "rb")
 
@@ -188,8 +180,7 @@ def spd_write(fd, smbus_idx, dimm_slot, file_path):
             if spd_set_page(fd, page):
                 print("SPD PAGE %d:" % page)
             else:
-                print("Set SPD PAGE %d failed." % page)
-                sys.exit(1)
+                sys.exit("Set SPD PAGE %d failed." % page)
 
         for index in range(0, 256):
             byte = int.from_bytes(spd_file.read(1), byteorder="little")
@@ -199,8 +190,7 @@ def spd_write(fd, smbus_idx, dimm_slot, file_path):
             try:
                 i2c_smbus_write_byte_data(fd, 0x50 + dimm_slot, index, byte)
             except IOError:
-                print("\n\nWrite failed.")
-                sys.exit(1)
+                sys.exit("\n\nWrite failed.")
 
             time.sleep(0.01)    # necessary delay when writing data to SPD EEPROM
 
@@ -237,8 +227,7 @@ def smbus_probe(dimm_slot = None):
     if smbus_idx.isdigit():
         smbus_idx = int(smbus_idx)
     else:
-        print("No SMBus adapter found.")
-        sys.exit(1)
+        sys.exit("No SMBus adapter found.")
 
     if dimm_slot == None:
         print("Probing for SPD EEPROM on SMBus %d" % smbus_idx)
@@ -263,21 +252,18 @@ def smbus_probe(dimm_slot = None):
         try:
             i2c_smbus_read_byte(fd, 0x50 + dimm_slot)
         except IOError:
-            print("DIMM slot %d is empty." % dimm_slot)
-            sys.exit(1)
+            sys.exit("DIMM slot %d is empty." % dimm_slot)
 
         return fd, smbus_idx
 
 def main():
     if os.getuid():
-        print("Please run this script as root.")
-        sys.exit(1)
+        sys.exit("Please run this script as root.")
 
     try:
         opts, _args = getopt.getopt(sys.argv[1:], "lrwd:f:")
     except getopt.error:
-        print_usage()
-        sys.exit(1)
+        sys.exit(print_usage())
 
     op_code = 0
     dimm_slot = ""
@@ -310,11 +296,10 @@ def main():
         elif op_code == 3:
             spd_write(fd, smbus_idx, int(dimm_slot), file_path)
     else:
-        print_usage()
-        sys.exit(1)
+        sys.exit(print_usage())
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        exit(1)
+        sys.exit()
