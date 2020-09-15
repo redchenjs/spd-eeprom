@@ -26,7 +26,7 @@ import subprocess
 try:
     import fcntl
 except ImportError:
-    print("Operating system not supported.")
+    print("This operating system is not supported.")
     exit(1)
 
 # To determine what functionality is present
@@ -237,7 +237,7 @@ def smbus_probe(dimm_slot = None):
     if smbus_idx.isdigit():
         smbus_idx = int(smbus_idx)
     else:
-        print("SMBus adapter not found.")
+        print("No SMBus adapter found.")
         sys.exit(1)
 
     if dimm_slot == None:
@@ -270,7 +270,7 @@ def smbus_probe(dimm_slot = None):
 
 def main():
     if os.getuid():
-        print("Please run as root.")
+        print("Please run this script as root.")
         sys.exit(1)
 
     try:
