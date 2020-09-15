@@ -96,10 +96,12 @@ def i2c_smbus_write_byte_data(fd, addr, reg, val):
 
 def print_usage():
     print("Usage:")
+    print("   ", sys.argv[0], "-l")
     print("   ", sys.argv[0], "-r -d DIMM -f FILE")
     print("   ", sys.argv[0], "-w -d DIMM -f FILE")
     print()
     print("Options:")
+    print("    -l           list used DIMM slots")
     print("    -r           read data from SPD EEPROM (output to file)")
     print("    -w           write data to SPD EEPROM (input from file)")
     print("    -d DIMM      DIMM slot index (0 - 7)")
@@ -121,7 +123,7 @@ def spd_read(fd, smbus_idx, dimm_slot, file_path):
 
     ee1004 = spd_set_page(fd, 0)
 
-    print("Reading from", "EE1004" if ee1004 else "AT24", "SPD EEPROM: 0x5%d" % dimm_slot, "at SMBus %d" % smbus_idx)
+    print("Reading from %s SPD EEPROM: 0x5%d on SMBus %d" % ("EE1004" if ee1004 else "AT24", dimm_slot, smbus_idx))
 
     spd_file = open(file_path, "wb")
 
@@ -169,7 +171,7 @@ def spd_write(fd, smbus_idx, dimm_slot, file_path):
         print("The SPD file must be exactly 512 bytes!")
         sys.exit(1)
 
-    print("Writing to", "EE1004" if ee1004 else "AT24", "SPD EEPROM: 0x5%d" % dimm_slot, "at SMBus %d" % smbus_idx)
+    print("Writing to %s SPD EEPROM: 0x5%d on SMBus %d" % ("EE1004" if ee1004 else "AT24", dimm_slot, smbus_idx))
 
     print("\nWARNING! Writing wrong data to SPD EEPROM will leave your system UNBOOTABLE!")
     ans = input("Continue anyway? [y/N] ").lower()
@@ -209,40 +211,7 @@ def spd_write(fd, smbus_idx, dimm_slot, file_path):
 
     print("\nWrite done.")
 
-def main():
-    if os.getuid():
-        print("Please run as root.")
-        sys.exit(1)
-
-    try:
-        opts, _args = getopt.getopt(sys.argv[1:], "rwd:f:")
-    except getopt.error:
-        print_usage()
-        sys.exit(1)
-
-    eeprom_rw = 0
-    smbus_idx = ""
-    dimm_slot = ""
-    file_path = ""
-
-    for opt, arg in opts:
-        if opt in ("-r"):
-            eeprom_rw = 1
-        elif opt in ("-w"):
-            eeprom_rw = 2
-        elif opt in ("-d"):
-            dimm_slot = arg
-        elif opt in ("-f"):
-            file_path = arg
-
-    if len(opts) != 3 \
-        or eeprom_rw == 0 \
-        or len(file_path) == 0 \
-        or not dimm_slot.isdigit() \
-        or not 0 <= int(dimm_slot) <= 7:
-        print_usage()
-        sys.exit(1)
-
+def smbus_probe(dimm_slot = None):
     try:
         args = ["rmmod", "at24", "ee1004", "eeprom"]
         proc = subprocess.Popen(args=args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -253,6 +222,8 @@ def main():
         proc.communicate()
     except Exception:
         pass
+
+    smbus_idx = ""
 
     files = os.listdir("/dev")
     files = list(filter(lambda x: x.startswith("i2c-"), files))
@@ -265,21 +236,82 @@ def main():
 
     if smbus_idx.isdigit():
         smbus_idx = int(smbus_idx)
-        dimm_slot = int(dimm_slot)
     else:
         print("SMBus adapter not found.")
         sys.exit(1)
 
-    try:
-        i2c_smbus_read_byte(fd, 0x50 + dimm_slot)
-    except IOError:
-        print("DIMM slot %d is empty." % dimm_slot)
+    if dimm_slot == None:
+        print("Probing for SPD EEPROM on SMBus %d" % smbus_idx)
+        print()
+
+        eeprom = 0
+        ee1004 = spd_set_page(fd, 0)
+
+        for slot in range(0, 8):
+            try:
+                i2c_smbus_read_byte(fd, 0x50 + slot)
+
+                print("DIMM slot %d: %s SPD EEPROM" % (slot, "512 Byte EE1004" if ee1004 else "256 Byte AT24"))
+
+                eeprom += 1
+            except IOError:
+                pass
+
+        if eeprom == 0:
+            print("No SPD EEPROM detected.")
+    else:
+        try:
+            i2c_smbus_read_byte(fd, 0x50 + dimm_slot)
+        except IOError:
+            print("DIMM slot %d is empty." % dimm_slot)
+            sys.exit(1)
+
+        return fd, smbus_idx
+
+def main():
+    if os.getuid():
+        print("Please run as root.")
         sys.exit(1)
 
-    if eeprom_rw == 1:
-        spd_read(fd, smbus_idx, dimm_slot, file_path)
-    elif eeprom_rw == 2:
-        spd_write(fd, smbus_idx, dimm_slot, file_path)
+    try:
+        opts, _args = getopt.getopt(sys.argv[1:], "lrwd:f:")
+    except getopt.error:
+        print_usage()
+        sys.exit(1)
+
+    op_code = 0
+    dimm_slot = ""
+    file_path = ""
+
+    for opt, arg in opts:
+        if opt in ("-l"):
+            op_code = 1
+        elif opt in ("-r"):
+            op_code = 2
+        elif opt in ("-w"):
+            op_code = 3
+        elif opt in ("-d"):
+            dimm_slot = arg
+        elif opt in ("-f"):
+            file_path = arg
+
+    if op_code == 1 and len(opts) == 1:
+        smbus_probe()
+    elif op_code != 0 \
+        and len(opts) == 3 \
+        and len(file_path) != 0 \
+        and dimm_slot.isdigit() \
+        and 0 <= int(dimm_slot) <= 7:
+
+        fd, smbus_idx = smbus_probe(int(dimm_slot))
+
+        if op_code == 2:
+            spd_read(fd, smbus_idx, int(dimm_slot), file_path)
+        elif op_code == 3:
+            spd_write(fd, smbus_idx, int(dimm_slot), file_path)
+    else:
+        print_usage()
+        sys.exit(1)
 
 if __name__ == "__main__":
     try:
