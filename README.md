@@ -13,17 +13,20 @@ python
 
 ## Usage
 
-* DIMM: DIMM slot index (0 - 7)
-* FILE: input or output file path
+### List used DIMM slots
+
+```
+sudo ./spd-eeprom.py -l
+```
 
 ### Read data from SPD EEPROM
 
 ```
-sudo spd-eeprom.py -r -d DIMM -f FILE
+sudo ./spd-eeprom.py -r -d DIMM -f FILE
 ```
 
 ### Write data to SPD EEPROM
 
 ```
-sudo spd-eeprom.py -w -d DIMM -f FILE
+sudo ./spd-eeprom.py -w -d DIMM -f FILE
 ```
